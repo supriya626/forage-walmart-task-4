@@ -1,175 +1,115 @@
-import pandas as pd
+import csv
 import sqlite3
-from collections import defaultdict
+class DatabaseConnector:
+# '''Manages a connection to a sqlite database.'''
+def __init__(self, database_file):
+   self.connection = sqlite3.connect(database_file)
+   self.cursor = self.connection.cursor()
 
-# Read the spreadsheets into DataFrames
-spreadsheet0 = pd.read_excel('shipping_data_0.csv')
-spreadsheet1 = pd.read_excel('shipping_data_1.csv')
-spreadsheet2 = pd.read_excel('shipping_data_2.csv')
+def populate(self, spreadsheet_folder):
+# Populate the database with data imported from each spreadsheet.
+# open the spreadsheets
+   with open(f"{spreadsheet_folder}/shipping_data_0.csv", "r") as spreadsheet_file_0:
+      with open(f"{spreadsheet_folder}/shipping_data_1.csv", "r") as spreadsheet_file_1:
+        with open(f"{spreadsheet_folder}/shipping_data_2.csv", "r") as spreadsheet_file_2:
+            # prepare the csv readers
+            csv_reader_0 = csv.reader(spreadsheet_file_0)
+            csv_reader_1 = csv.reader(spreadsheet_file_1)
+            csv_reader_2 = csv.reader(spreadsheet_file_2)
+# populate first spreadsheet
+self.populate_first_shipping_data(csv_reader_0)
+self.populate_second_shipping_data(csv_reader_1, csv_reader_2)
 
-# Create a connection to the SQLite database
-conn = sqlite3.connect('shipment_database.db')
-cur = conn.cursor()
-
-# Create tables based on the provided ERD
-cur.executescript('''
-    CREATE TABLE IF NOT EXISTS Product (
-        ProductID INTEGER PRIMARY KEY,
-        Name TEXT,
-        ProductType TEXT,
-        ManufacturerID INTEGER
-    );
-
-    CREATE TABLE IF NOT EXISTS PetFood (
-        ProductID INTEGER PRIMARY KEY,
-        Weight REAL,
-        Flavor TEXT,
-        TargetHealthCondition TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS PetToy (
-        ProductID INTEGER PRIMARY KEY,
-        Material TEXT,
-        Durability TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS PetApparel (
-        ProductID INTEGER PRIMARY KEY,
-        Color TEXT,
-        Size TEXT,
-        CareInstructions TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS Animal (
-        AnimalID INTEGER PRIMARY KEY,
-        AnimalType TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS Manufacturer (
-        ManufacturerID INTEGER PRIMARY KEY,
-        Name TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS Customer (
-        CustomerID INTEGER PRIMARY KEY,
-        Name TEXT,
-        Email TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS Transaction (
-        TransactionID INTEGER PRIMARY KEY,
-        CustomerID INTEGER,
-        Date TEXT,
-        FOREIGN KEY (CustomerID) REFERENCES Customer(CustomerID)
-    );
-
-    CREATE TABLE IF NOT EXISTS TransactionProduct (
-        TransactionID INTEGER,
-        ProductID INTEGER,
-        Quantity INTEGER,
-        PRIMARY KEY (TransactionID, ProductID),
-        FOREIGN KEY (TransactionID) REFERENCES Transaction(TransactionID),
-        FOREIGN KEY (ProductID) REFERENCES Product(ProductID)
-    );
-
-    CREATE TABLE IF NOT EXISTS WalmartLocation (
-        LocationID INTEGER PRIMARY KEY,
-        Name TEXT,
-        ZipCode TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS Shipment (
-        ShipmentID INTEGER PRIMARY KEY,
-        OriginLocationID INTEGER,
-        DestinationLocationID INTEGER,
-        Date TEXT,
-        FOREIGN KEY (OriginLocationID) REFERENCES WalmartLocation(LocationID),
-        FOREIGN KEY (DestinationLocationID) REFERENCES WalmartLocation(LocationID)
-    );
-
-    CREATE TABLE IF NOT EXISTS ShipmentProduct (
-        ShipmentID INTEGER,
-        ProductID INTEGER,
-        Quantity INTEGER,
-        PRIMARY KEY (ShipmentID, ProductID),
-        FOREIGN KEY (ShipmentID) REFERENCES Shipment(ShipmentID),
-        FOREIGN KEY (ProductID) REFERENCES Product(ProductID)
-    );
-
-    CREATE TABLE IF NOT EXISTS ProductAnimal (
-        ProductID INTEGER,
-        AnimalID INTEGER,
-        PRIMARY KEY (ProductID, AnimalID),
-        FOREIGN KEY (ProductID) REFERENCES Product(ProductID),
-        FOREIGN KEY (AnimalID) REFERENCES Animal(AnimalID)
-    );
-''')
-
-# Insert data from spreadsheet 0 into the database
-for index, row in spreadsheet0.iterrows():
-    product_type = row['ProductType']
-    if product_type == 'PetFood':
-        cur.execute('INSERT INTO Product (Name, ProductType, ManufacturerID) VALUES (?, ?, ?)', 
-                    (row['Name'], product_type, row['ManufacturerID']))
-        product_id = cur.lastrowid
-        cur.execute('INSERT INTO PetFood (ProductID, Weight, Flavor, TargetHealthCondition) VALUES (?, ?, ?, ?)', 
-                    (product_id, row['Weight'], row['Flavor'], row['TargetHealthCondition']))
-    elif product_type == 'PetToy':
-        cur.execute('INSERT INTO Product (Name, ProductType, ManufacturerID) VALUES (?, ?, ?)', 
-                    (row['Name'], product_type, row['ManufacturerID']))
-        product_id = cur.lastrowid
-        cur.execute('INSERT INTO PetToy (ProductID, Material, Durability) VALUES (?, ?, ?)', 
-                    (product_id, row['Material'], row['Durability']))
-    elif product_type == 'PetApparel':
-        cur.execute('INSERT INTO Product (Name, ProductType, ManufacturerID) VALUES (?, ?, ?)', 
-                    (row['Name'], product_type, row['ManufacturerID']))
-        product_id = cur.lastrowid
-        cur.execute('INSERT INTO PetApparel (ProductID, Color, Size, CareInstructions) VALUES (?, ?, ?, ?)', 
-                    (product_id, row['Color'], row['Size'], row['CareInstructions']))
-
-# Insert data from spreadsheet 2 into the WalmartLocation table
-location_map = {}
-for index, row in spreadsheet2.iterrows():
-    cur.execute('INSERT INTO WalmartLocation (Name, ZipCode) VALUES (?, ?)', 
-                (row['LocationName'], row['ZipCode']))
-    location_map[row['LocationName']] = cur.lastrowid
-
-# Insert data from spreadsheet 1 into the database
-shipment_map = defaultdict(list)
-for index, row in spreadsheet1.iterrows():
-    shipment_map[row['ShippingIdentifier']].append(row)
-
-for shipment_id, rows in shipment_map.items():
-    origin_location_id = location_map[rows[0]['Origin']]
-    destination_location_id = location_map[rows[0]['Destination']]
-    date = rows[0]['ShipmentDate']
-    cur.execute('INSERT INTO Shipment (ShipmentID, OriginLocationID, DestinationLocationID, Date) VALUES (?, ?, ?, ?)', 
-                (shipment_id, origin_location_id, destination_location_id, date))
+def populate_first_shipping_data(self, csv_reader_0):
+   # Populate the database with data imported from the first spreadsheet.
+   for row_index, row in enumerate(csv_reader_0):
+   # ignore the header row
+    if row_index > 0:
+        # extract each required field
+       product_name = row[2]
+       product_quantity = row[4]
+       origin = row[0]
+       destination = row[1]
+# insert the data into the database
+self.insert_product_if_it_does_not_already_exist(product_name)
+self.insert_shipment(product_name, product_quantity, origin, destination)
+# give an indication of progress
+print(f"inserted product {row_index} from shipping_data_0")
+def populate_second_shipping_data(self, csv_reader_1, csv_reader_2):
+# Populate the database with data imported from the second and third spreadsheets.
+# collect shipment info
+    shipment_info = {}
+    for row_index, row in enumerate(csv_reader_2):
+# ignore the header row
+       if row_index > 0:
+# extract each required field
+        shipment_identifier = row[0]
+        origin = row[1]
+        destination = row[2]
+# store them for later use
     
-    for row in rows:
-        product_type = row['ProductType']
-        if product_type == 'PetFood':
-            cur.execute('INSERT INTO Product (Name, ProductType, ManufacturerID) VALUES (?, ?, ?)', 
-                        (row['Name'], product_type, row['ManufacturerID']))
-            product_id = cur.lastrowid
-            cur.execute('INSERT INTO PetFood (ProductID, Weight, Flavor, TargetHealthCondition) VALUES (?, ?, ?, ?)', 
-                        (product_id, row['Weight'], row['Flavor'], row['TargetHealthCondition']))
-        elif product_type == 'PetToy':
-            cur.execute('INSERT INTO Product (Name, ProductType, ManufacturerID) VALUES (?, ?, ?)', 
-                        (row['Name'], product_type, row['ManufacturerID']))
-            product_id = cur.lastrowid
-            cur.execute('INSERT INTO PetToy (ProductID, Material, Durability) VALUES (?, ?, ?)', 
-                        (product_id, row['Material'], row['Durability']))
-        elif product_type == 'PetApparel':
-            cur.execute('INSERT INTO Product (Name, ProductType, ManufacturerID) VALUES (?, ?, ?)', 
-                        (row['Name'], product_type, row['ManufacturerID']))
-            product_id = cur.lastrowid
-            cur.execute('INSERT INTO PetApparel (ProductID, Color, Size, CareInstructions) VALUES (?, ?, ?, ?)', 
-                        (product_id, row['Color'], row['Size'], row['CareInstructions']))
+shipment_info[shipment_identifier] = {
+"origin": origin,
+"destination": destination,
+"products": {}
+}
+# read in product information
+for row_index, row in enumerate(csv_reader_1):
+# ignore the header row
+    if row_index > 0:
+# extract each required field
+       shipment_identifier = row[0]
+       product_name = row[1]
+# populate intermediary data structure
+       products = shipment_info[shipment_identifier]["products"]
+       if products.get(product_name, None) is None:
+        products[product_name] = 1
+       else:
+        products[product_name] += 1
+# insert the data into the database
+count = 0
+for shipment_identifier, shipment in shipment_info.items():
+# collect origin and destination
+    origin = shipment_info[shipment_identifier]["origin"]
+    destination = shipment_info[shipment_identifier]["destination"]
+for product_name, product_quantity in shipment["products"].items():
+# iterate through products and insert into database
+    self.insert_product_if_it_does_not_already_exist(product_name)
+    self.insert_shipment(product_name, product_quantity, origin, destination)
+# give an indication of progress
+    print(f"inserted product {count} from shipping_data_1")
+    count += 1
+def insert_product_if_it_does_not_already_exist(self, product_name):
 
-        cur.execute('INSERT INTO ShipmentProduct (ShipmentID, ProductID, Quantity) VALUES (?, ?, ?)', 
-                    (shipment_id, product_id, row['Quantity']))
-
-# Commit the transaction and close the connection
-conn.commit()
-conn.close()
+# Insert a new product into the database.
+# If a product already exists in the database with the given name,
+# ignore it.
+    query = """
+    INSERT OR IGNORE INTO product (name)
+    VALUES (?);
+    """
+    self.cursor.execute(query, (product_name,))
+    self.connection.commit()
+def insert_shipment(self, product_name, product_quantity, origin, destination):
+# Insert a new shipment into the database.
+# collect the product id
+   query = """
+   SELECT id
+   FROM product
+   WHERE product.name = ?;
+   """
+   self.cursor.execute(query, (product_name,))
+   product_id = self.cursor.fetchone()[0]
+# insert the shipment
+   query = """
+   INSERT OR IGNORE INTO shipment (product_id, quantity, origin, destination)
+   VALUES (?, ?, ?, ?);
+   """
+   self.cursor.execute(query, (product_id, product_quantity, origin, destination))
+   self.connection.commit()
+def close(self):
+   self.connection.close()
+   if __name__ == '__main__':
+    database_connector = DatabaseConnector("shipment_database.db")
+    database_connector.populate("./data")
+    database_connector.close() 
